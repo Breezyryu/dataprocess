@@ -1,0 +1,12 @@
+[project]
+name = "dataprocess"
+version = "0.1.0"
+description = "배터리 충방전 데이터 자동 분류 및 처리 시스템"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.0.0",
+    "numpy>=1.26.0",
+    "matplotlib>=3.8.0",
+    "jupyter>=1.0.0",
+]
