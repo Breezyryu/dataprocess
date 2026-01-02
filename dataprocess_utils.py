@@ -199,8 +199,20 @@ def load_pne_profile_data(channel_path):
     if dataframes:
         df_combined = pd.concat(dataframes, ignore_index=True)
         df_combined = df_combined[[0, 18, 19, 8, 9, 21, 10, 11, 7, 17]]
-        df_combined.columns = ['index', 'time_day', 'time_s', 'voltage_v', 'current_mA', 
-                               'temp_C', 'ChgCap_mAh', 'DchgCap_mAh', 'step', 'steptime_s']
+        df_combined.columns = ['index', 'time_d', 'time_s', 'voltage_v', 'current_mA', 
+                               'Temp_C', 'ChgCap_mAh', 'DchgCap_mAh', 'step', 'Steptime_s']
+        
+        df['Temp_C'] = df['Temp_C'] / 1000
+        df['Current_mA'] = df['Current_mA'] / 1000
+        df['DchgCap_mAh'] = df['DchgCap_mAh'] / 1000
+        df['ChgCap_mAh'] = df['ChgCap_mAh'] / 1000
+        df['Steptime_s'] = df['Steptime_s'] / 100
+        
+        df['time_s'] = (df['time_d'] * 24 * 60 * 60 + df['time_s']) / 100
+        df['time_m'] = df['time_s'] / 60
+        df['time_h'] = df['time_m'] / 60
+        df['time_d'] = df['time_h'] / 24
+
         return df_combined
     else:
         return None
