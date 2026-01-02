@@ -224,20 +224,25 @@ def load_pne_profile_data(channel_path):
     
     if dataframes:
         df_combined = pd.concat(dataframes, ignore_index=True)
-        df_combined = df_combined[[0, 18, 19, 8, 9, 21, 10, 11, 2, 6,7, 17]]
-        df_combined.columns = ['index', 'time_day', 'time_s', 'voltage_v', 'current_mA', 
-                               'Temp_C', 'ChgCap_mAh', 'DchgCap_mAh', 'Condition','EndState' ,'step', 'Steptime_s']
-        return df_combined
+        df_combined = df_combined[[0, 18, 19, 8, 9, 21, 10, 11, 2, 6,7, 17, 27]]
+        df_combined.columns = ['index', 'time_day', 'time_s', 'Voltage_V', 'Current_mA', 
+                               'Temp_C', 'ChgCap_mAh', 'DchgCap_mAh', 'Condition','EndState' ,'step', 'Steptime_s', 'Cycle']
+        
 
         df_combined['Temp_C'] = df_combined['Temp_C'] / 1000
         df_combined['Current_mA'] = df_combined['Current_mA'] / 1000
         df_combined['DchgCap_mAh'] = df_combined['DchgCap_mAh'] / 1000
         df_combined['ChgCap_mAh'] = df_combined['ChgCap_mAh'] / 1000
         df_combined['Steptime_s'] = df_combined['Steptime_s'] / 100
-        df_combined['time_s'] = (df_combined['time_day'] * 24 * 60 * 60) + df_combined['time_s']
+        df_combined['time_s'] = (df_combined['time_day'] * 24 * 60 * 60) + df_combined['time_s'] / 100
         df_combined['time_min'] = df_combined['time_s'] / 60
         df_combined['time_hour'] = df_combined['time_min'] / 60
         df_combined['time_day'] = df_combined['time_hour'] / 24
+        df_combined['Voltage_V'] = df_combined['Voltage_V'] / 1000
+
+        df_combined = df_combined[df_combined['Condition'] != 8]
+
+        return df_combined
 
 
     else:

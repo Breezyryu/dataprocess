@@ -2,11 +2,14 @@
 Profile 데이터 분석 모듈
 
 배터리 profile 데이터를 분석, 필터링, 시각화하는 함수들을 제공합니다.
+인터랙티브 시각화를 위해 Plotly를 사용합니다.
 """
 
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
 from typing import Dict, List, Optional, Tuple
 
 
@@ -208,116 +211,246 @@ def identify_rpt_cycles(cycle_df: pd.DataFrame, rpt_pattern: Optional[int] = Non
 
 
 # ============================================================================
-# 시각화 함수
+# 성능 최적화 함수
 # ============================================================================
 
-def visualize_profile_overview(df: pd.DataFrame, title: str = "Profile 데이터 개요"):
+def downsample_data(df: pd.DataFrame, max_points: int = 10000) -> pd.DataFrame:
     """
-    Profile 데이터 전체 개요 시각화
+    대용량 데이터 다운샘플링 (시각화 성능 최적화)
+    
+    Parameters:
+        df (pd.DataFrame): 원본 데이터
+        max_points (int): 최대 데이터 포인트 수
+    
+    Returns:
+        pd.DataFrame: 다운샘플링된 데이터
+    """
+    if len(df) <= max_points:
+        return df
+    
+    # 균등 간격 샘플링
+    step = len(df) // max_points
+    sampled = df.iloc[::step].copy()
+    
+    print(f"📉 다운샘플링: {len(df):,}행 → {len(sampled):,}행 (시각화 성능 최적화)")
+    
+    return sampled
+
+
+# ============================================================================
+# 시각화 함수 (Plotly 인터랙티브)
+# ============================================================================
+
+def visualize_profile_overview(df: pd.DataFrame, title: str = "Profile 데이터 개요", 
+                               max_points: int = 50000):
+    """
+    Profile 데이터 전체 개요 시각화 (인터랙티브)
     
     Parameters:
         df (pd.DataFrame): Profile 데이터
         title (str): 그래프 제목
+        max_points (int): 최대 표시 포인트 수 (성능 최적화)
     """
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10))
+    # 다운샘플링
+    df_plot = downsample_data(df, max_points)
+    
+    # 서브플롯 생성
+    fig = make_subplots(
+        rows=3, cols=1,
+        subplot_titles=('전압 (V)', '전류 (mA)', '용량 (mAh)'),
+        vertical_spacing=0.08,
+        shared_xaxes=True
+    )
     
     # 전압 프로파일
-    if 'voltage_v' in df.columns and 'time_s' in df.columns:
-        axes[0].plot(df['time_s'], df['voltage_v'], linewidth=0.5, alpha=0.7)
-        axes[0].set_ylabel('전압 (V)', fontsize=12)
-        axes[0].set_title(f'{title} - 전압', fontsize=14, fontweight='bold')
-        axes[0].grid(True, alpha=0.3)
+    if 'voltage_v' in df_plot.columns and 'time_s' in df_plot.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df_plot['time_s'], 
+                y=df_plot['voltage_v'],
+                mode='lines',
+                name='전압',
+                line=dict(color='#1f77b4', width=1),
+                hovertemplate='시간: %{x:.0f}s<br>전압: %{y:.2f}V<extra></extra>'
+            ),
+            row=1, col=1
+        )
     
     # 전류 프로파일
-    if 'current_mA' in df.columns and 'time_s' in df.columns:
-        axes[1].plot(df['time_s'], df['current_mA'], linewidth=0.5, alpha=0.7, color='orange')
-        axes[1].set_ylabel('전류 (mA)', fontsize=12)
-        axes[1].set_title(f'{title} - 전류', fontsize=14, fontweight='bold')
-        axes[1].grid(True, alpha=0.3)
+    if 'current_mA' in df_plot.columns and 'time_s' in df_plot.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df_plot['time_s'], 
+                y=df_plot['current_mA'],
+                mode='lines',
+                name='전류',
+                line=dict(color='#ff7f0e', width=1),
+                hovertemplate='시간: %{x:.0f}s<br>전류: %{y:.2f}mA<extra></extra>'
+            ),
+            row=2, col=1
+        )
     
     # 용량 프로파일
-    if 'ChgCap_mAh' in df.columns and 'DchgCap_mAh' in df.columns and 'time_s' in df.columns:
-        axes[2].plot(df['time_s'], df['ChgCap_mAh'], label='충전 용량', linewidth=0.5, alpha=0.7)
-        axes[2].plot(df['time_s'], df['DchgCap_mAh'], label='방전 용량', linewidth=0.5, alpha=0.7)
-        axes[2].set_xlabel('시간 (s)', fontsize=12)
-        axes[2].set_ylabel('용량 (mAh)', fontsize=12)
-        axes[2].set_title(f'{title} - 용량', fontsize=14, fontweight='bold')
-        axes[2].legend()
-        axes[2].grid(True, alpha=0.3)
+    if 'ChgCap_mAh' in df_plot.columns and 'DchgCap_mAh' in df_plot.columns and 'time_s' in df_plot.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df_plot['time_s'], 
+                y=df_plot['ChgCap_mAh'],
+                mode='lines',
+                name='충전 용량',
+                line=dict(color='#2ca02c', width=1),
+                hovertemplate='시간: %{x:.0f}s<br>충전: %{y:.2f}mAh<extra></extra>'
+            ),
+            row=3, col=1
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=df_plot['time_s'], 
+                y=df_plot['DchgCap_mAh'],
+                mode='lines',
+                name='방전 용량',
+                line=dict(color='#d62728', width=1),
+                hovertemplate='시간: %{x:.0f}s<br>방전: %{y:.2f}mAh<extra></extra>'
+            ),
+            row=3, col=1
+        )
     
-    plt.tight_layout()
-    plt.show()
+    # 레이아웃 설정
+    fig.update_xaxes(title_text="시간 (s)", row=3, col=1)
+    fig.update_yaxes(title_text="전압 (V)", row=1, col=1)
+    fig.update_yaxes(title_text="전류 (mA)", row=2, col=1)
+    fig.update_yaxes(title_text="용량 (mAh)", row=3, col=1)
+    
+    fig.update_layout(
+        title=title,
+        height=900,
+        showlegend=True,
+        hovermode='x unified',
+        template='plotly_white'
+    )
+    
+    fig.show()
 
 
-def visualize_voltage_profile(df: pd.DataFrame, color_by: str = 'Condition', title: str = "전압 프로파일"):
+def visualize_voltage_profile(df: pd.DataFrame, color_by: str = 'Condition', 
+                              title: str = "전압 프로파일", max_points: int = 50000):
     """
-    전압 프로파일 시각화 (Condition 또는 step으로 색상 구분)
+    전압 프로파일 시각화 (Condition 또는 step으로 색상 구분, 인터랙티브)
     
     Parameters:
         df (pd.DataFrame): Profile 데이터
         color_by (str): 색상 구분 기준 ('Condition' 또는 'step')
         title (str): 그래프 제목
+        max_points (int): 최대 표시 포인트 수
     """
     if 'voltage_v' not in df.columns or 'time_s' not in df.columns:
         print("⚠️  'voltage_v' 또는 'time_s' 컬럼이 없습니다.")
         return
     
-    fig, ax = plt.subplots(figsize=(14, 6))
+    # 다운샘플링
+    df_plot = downsample_data(df, max_points)
     
-    if color_by in df.columns:
-        unique_values = sorted(df[color_by].unique())
-        colors = plt.cm.tab10(np.linspace(0, 1, len(unique_values)))
+    fig = go.Figure()
+    
+    if color_by in df_plot.columns:
+        unique_values = sorted(df_plot[color_by].unique())
+        colors = px.colors.qualitative.Plotly
         
         for idx, value in enumerate(unique_values):
-            subset = df[df[color_by] == value]
+            subset = df_plot[df_plot[color_by] == value]
             label = f'{color_by} {value}'
             if color_by == 'Condition':
-                label = {1: '충전', 2: '방전'}.get(value, f'Condition {value}')
+                label = {1: '충전', 2: '방전', 3: 'Rest', 8: 'CCCV'}.get(value, f'Condition {value}')
             
-            ax.plot(subset['time_s'], subset['voltage_v'], 
-                   label=label, linewidth=0.8, alpha=0.7, color=colors[idx])
+            fig.add_trace(
+                go.Scatter(
+                    x=subset['time_s'],
+                    y=subset['voltage_v'],
+                    mode='lines',
+                    name=label,
+                    line=dict(color=colors[idx % len(colors)], width=1.5),
+                    hovertemplate=f'{label}<br>시간: %{{x:.0f}}s<br>전압: %{{y:.2f}}V<extra></extra>'
+                )
+            )
     else:
-        ax.plot(df['time_s'], df['voltage_v'], linewidth=0.8, alpha=0.7)
+        fig.add_trace(
+            go.Scatter(
+                x=df_plot['time_s'],
+                y=df_plot['voltage_v'],
+                mode='lines',
+                name='전압',
+                line=dict(width=1.5),
+                hovertemplate='시간: %{x:.0f}s<br>전압: %{y:.2f}V<extra></extra>'
+            )
+        )
     
-    ax.set_xlabel('시간 (s)', fontsize=12)
-    ax.set_ylabel('전압 (V)', fontsize=12)
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.legend(loc='best')
-    ax.grid(True, alpha=0.3)
+    fig.update_layout(
+        title=title,
+        xaxis_title='시간 (s)',
+        yaxis_title='전압 (V)',
+        height=600,
+        hovermode='x unified',
+        template='plotly_white',
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1.02
+        )
+    )
     
-    plt.tight_layout()
-    plt.show()
+    fig.show()
 
 
-def visualize_current_profile(df: pd.DataFrame, title: str = "전류 프로파일"):
+def visualize_current_profile(df: pd.DataFrame, title: str = "전류 프로파일", 
+                              max_points: int = 50000):
     """
-    전류 프로파일 시각화
+    전류 프로파일 시각화 (인터랙티브)
     
     Parameters:
         df (pd.DataFrame): Profile 데이터
         title (str): 그래프 제목
+        max_points (int): 최대 표시 포인트 수
     """
     if 'current_mA' not in df.columns or 'time_s' not in df.columns:
         print("⚠️  'current_mA' 또는 'time_s' 컬럼이 없습니다.")
         return
     
-    fig, ax = plt.subplots(figsize=(14, 6))
+    # 다운샘플링
+    df_plot = downsample_data(df, max_points)
     
-    ax.plot(df['time_s'], df['current_mA'], linewidth=0.8, alpha=0.7, color='orange')
-    ax.axhline(y=0, color='red', linestyle='--', linewidth=1, alpha=0.5)
+    fig = go.Figure()
     
-    ax.set_xlabel('시간 (s)', fontsize=12)
-    ax.set_ylabel('전류 (mA)', fontsize=12)
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.grid(True, alpha=0.3)
+    fig.add_trace(
+        go.Scatter(
+            x=df_plot['time_s'],
+            y=df_plot['current_mA'],
+            mode='lines',
+            name='전류',
+            line=dict(color='#ff7f0e', width=1.5),
+            hovertemplate='시간: %{x:.0f}s<br>전류: %{y:.2f}mA<extra></extra>'
+        )
+    )
     
-    plt.tight_layout()
-    plt.show()
+    # 0 기준선
+    fig.add_hline(y=0, line_dash="dash", line_color="red", opacity=0.5)
+    
+    fig.update_layout(
+        title=title,
+        xaxis_title='시간 (s)',
+        yaxis_title='전류 (mA)',
+        height=600,
+        hovermode='x unified',
+        template='plotly_white'
+    )
+    
+    fig.show()
 
 
 def visualize_capacity_evolution(cycle_df: pd.DataFrame, title: str = "사이클별 용량 변화"):
     """
-    사이클별 용량 변화 시각화
+    사이클별 용량 변화 시각화 (인터랙티브)
     
     Parameters:
         cycle_df (pd.DataFrame): 사이클 데이터
@@ -327,36 +460,72 @@ def visualize_capacity_evolution(cycle_df: pd.DataFrame, title: str = "사이클
         print("⚠️  'Cycle' 컬럼이 없습니다.")
         return
     
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig = go.Figure()
     
     # 충전 용량
     if 'ChgCap_mAh' in cycle_df.columns:
-        ax.plot(cycle_df['Cycle'], cycle_df['ChgCap_mAh'], 
-               marker='o', markersize=3, label='충전 용량', linewidth=1.5, alpha=0.7)
+        fig.add_trace(
+            go.Scatter(
+                x=cycle_df['Cycle'],
+                y=cycle_df['ChgCap_mAh'],
+                mode='lines+markers',
+                name='충전 용량',
+                marker=dict(size=4),
+                line=dict(width=2),
+                hovertemplate='사이클: %{x}<br>충전: %{y:.2f}mAh<extra></extra>'
+            )
+        )
     
     # 방전 용량
     if 'DchgCap_mAh' in cycle_df.columns:
-        ax.plot(cycle_df['Cycle'], cycle_df['DchgCap_mAh'], 
-               marker='s', markersize=3, label='방전 용량', linewidth=1.5, alpha=0.7)
+        fig.add_trace(
+            go.Scatter(
+                x=cycle_df['Cycle'],
+                y=cycle_df['DchgCap_mAh'],
+                mode='lines+markers',
+                name='방전 용량',
+                marker=dict(size=4, symbol='square'),
+                line=dict(width=2),
+                hovertemplate='사이클: %{x}<br>방전: %{y:.2f}mAh<extra></extra>'
+            )
+        )
     
     # Toyo 데이터의 경우
     if 'Capacity_mAh' in cycle_df.columns:
-        ax.plot(cycle_df['Cycle'], cycle_df['Capacity_mAh'], 
-               marker='o', markersize=3, label='용량', linewidth=1.5, alpha=0.7)
+        fig.add_trace(
+            go.Scatter(
+                x=cycle_df['Cycle'],
+                y=cycle_df['Capacity_mAh'],
+                mode='lines+markers',
+                name='용량',
+                marker=dict(size=4),
+                line=dict(width=2),
+                hovertemplate='사이클: %{x}<br>용량: %{y:.2f}mAh<extra></extra>'
+            )
+        )
     
-    ax.set_xlabel('사이클', fontsize=12)
-    ax.set_ylabel('용량 (mAh)', fontsize=12)
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    fig.update_layout(
+        title=title,
+        xaxis_title='사이클',
+        yaxis_title='용량 (mAh)',
+        height=600,
+        hovermode='x unified',
+        template='plotly_white',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
     
-    plt.tight_layout()
-    plt.show()
+    fig.show()
 
 
 def visualize_condition_distribution(df: pd.DataFrame, title: str = "Condition 분포"):
     """
-    Condition별 데이터 분포 시각화
+    Condition별 데이터 분포 시각화 (인터랙티브)
     
     Parameters:
         df (pd.DataFrame): Profile 데이터
@@ -368,32 +537,43 @@ def visualize_condition_distribution(df: pd.DataFrame, title: str = "Condition �
     
     condition_counts = df['Condition'].value_counts().sort_index()
     
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    bars = ax.bar(condition_counts.index, condition_counts.values, alpha=0.7, edgecolor='black')
-    
-    # 막대 위에 개수 표시
-    for bar in bars:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-               f'{int(height):,}',
-               ha='center', va='bottom', fontsize=10)
-    
-    # X축 레이블 변경
+    # 레이블 변경
     labels = []
     for cond in condition_counts.index:
-        label = {1: '충전', 2: '방전'}.get(cond, f'Condition {cond}')
+        label = {1: '충전', 2: '방전', 3: 'Rest', 8: 'CCCV'}.get(cond, f'Condition {cond}')
         labels.append(label)
     
-    ax.set_xticks(condition_counts.index)
-    ax.set_xticklabels(labels)
-    ax.set_xlabel('Condition', fontsize=12)
-    ax.set_ylabel('데이터 개수', fontsize=12)
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.grid(True, alpha=0.3, axis='y')
+    # 비율 계산
+    total = condition_counts.sum()
+    percentages = (condition_counts / total * 100).round(1)
     
-    plt.tight_layout()
-    plt.show()
+    fig = go.Figure()
+    
+    fig.add_trace(
+        go.Bar(
+            x=labels,
+            y=condition_counts.values,
+            text=[f'{count:,}<br>({pct}%)' for count, pct in zip(condition_counts.values, percentages)],
+            textposition='outside',
+            marker=dict(
+                color=condition_counts.values,
+                colorscale='Viridis',
+                showscale=False
+            ),
+            hovertemplate='%{x}<br>개수: %{y:,}<br>비율: %{text}<extra></extra>'
+        )
+    )
+    
+    fig.update_layout(
+        title=title,
+        xaxis_title='Condition',
+        yaxis_title='데이터 개수',
+        height=600,
+        template='plotly_white',
+        showlegend=False
+    )
+    
+    fig.show()
 
 
 # ============================================================================
@@ -428,13 +608,14 @@ def get_profile_summary(df: pd.DataFrame) -> Dict:
 
 
 if __name__ == "__main__":
-    print("Profile Analyzer 모듈")
+    print("Profile Analyzer 모듈 (Plotly 인터랙티브 버전)")
     print("사용 가능한 함수:")
     print("  - analyze_profile_structure()")
     print("  - filter_by_condition()")
     print("  - filter_by_step()")
     print("  - identify_cccv_phases()")
     print("  - identify_rpt_cycles()")
+    print("  - downsample_data()")
     print("  - visualize_profile_overview()")
     print("  - visualize_voltage_profile()")
     print("  - visualize_current_profile()")
